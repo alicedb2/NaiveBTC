@@ -28,7 +28,7 @@ function Base.show(io::IO, private_key::PrivateKey)
     println(io, "PrivateKey")
     println(io, "     key: $(bytes2hex(private_key.key))")
     println(io, "     WIF: $(private_key.wif)")
-    println(io, "  WIF(c): $(private_key.wif_c)")
+    print(io, "  WIF(c): $(private_key.wif_c)")
 end
 
 function Base.show(io::IO, public_key::PublicKey)
@@ -51,9 +51,15 @@ function Base.show(io::IO, wallet::Wallet)
     println(io, "Wallet")
     println(io, wallet.private_key)
     println(io)
+    println(io, wallet.private_key)
+    println(io)
     println(io, wallet.public_key)
     println(io)
     print(io, wallet.addresses)
+end
+
+function PrivateKey(private_key::T) where {T <: Number}
+    return PrivateKey(bytes(private_key))
 end
 
 function PrivateKey(private_key::AbstractString; check=true)
@@ -68,7 +74,14 @@ function PrivateKey(private_key::AbstractString; check=true)
     end
 end
 
-function PrivateKey(private_key::AbstractVector{UInt8}; check=true)
+function PrivateKey(private_key::AbstractVector{UInt8}; check=true, pad=:left, padvalue=0x00)
+    if length(private_key) < 32
+        if pad == :left
+            private_key = vcat(fill(padvalue, 32 - length(private_key)), private_key)
+        elseif pad == :right
+            private_key = vcat(private_key, fill(padvalue, 32 - length(private_key)))
+        end
+    end
     if check
         length(private_key) == 32 || throw(ArgumentError("Private key must be 32 bytes long but length(private_key) = $(length(private_key))"))
         (1 <= to_big(private_key) <= 115792089237316195423570985008687907852837564279074904382605163141518161494336) || throw("Private key out of range")
@@ -78,7 +91,7 @@ function PrivateKey(private_key::AbstractVector{UInt8}; check=true)
                       privatekey_to_wif(private_key, compressed=true))
 end
 
-function PublicKey(private_key::Union{AbstractString, AbstractVector{UInt8}}; check=true)
+function PublicKey(private_key::Union{AbstractString, AbstractVector{UInt8}, T}; check=true) where {T <: Number}
     return PublicKey(PrivateKey(private_key), check=check)
 end
 
@@ -99,7 +112,7 @@ function PublicKey(private_key::PrivateKey; check=true)
                     )
 end
 
-function BTCAddresses(private_key::Union{AbstractString, AbstractVector{UInt8}}; testnet=false)
+function BTCAddresses(private_key::Union{AbstractString, AbstractVector{UInt8}, T}; testnet=false) where {T <: Number}
     return BTCAddresses(PrivateKey(private_key), testnet=testnet)
 end
 
@@ -131,7 +144,7 @@ function BTCAddresses(public_key::PublicKey; testnet=false)
     return BTCAddresses(String(p2pkh_address), String(compressed_p2pkh_address), String(p2sh_address), bech32_address)
 end
 
-function Wallet(private_key::Union{AbstractString, AbstractVector{UInt8}})
+function Wallet(private_key::Union{AbstractString, AbstractVector{UInt8}, T}) where {T <: Number}
     return Wallet(PrivateKey(private_key))
 end
 
