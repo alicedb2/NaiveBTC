@@ -58,10 +58,23 @@ function Base.show(io::IO, wallet::Wallet)
     print(io, wallet.addresses)
 end
 
-function PrivateKey(private_key::T) where {T <: Number}
+"""
+    function PrivateKey(private_key::T) where {T <: Integer}
+
+Assumes `private_key` is an integer and pass it as its bytes representation.
+
+"""
+function PrivateKey(private_key::T) where {T <: Integer}
     return PrivateKey(bytes(private_key))
 end
 
+"""
+    function PrivateKey(private_key::AbstractString)
+
+If `length(private_key)` = 51 or 52, `private_key` is assumed to be in WIF uncompressed or compressed format
+
+If `length(private_key)` = 64, `private_key` is assumed to be a string of hexadecimal numbers
+"""
 function PrivateKey(private_key::AbstractString; check=true)
     check && (length(private_key) in (51, 52, 64) || throw(ArgumentError("Private key must either be 51 (WIF), 52 (compressed WIF), or 64 characters long but length(private_key) = $(length(private_key))")))
     
@@ -74,6 +87,17 @@ function PrivateKey(private_key::AbstractString; check=true)
     end
 end
 
+
+"""
+    function PrivateKey(private_key::AbstractVector{UInt8}; check=true, pad=:left, padvalue=0x00)
+
+Return PrivateKey given a `private_key` in its bytes representation.
+
+## Arguments
+- `check=true`: Perform basic sanity check on key (length and range)
+- `pad=:left`: Pad bytes array to the `:left` or to the `:right` with `padvalue` to make it 32-bytes long
+- `padvalue=0x00`: Padding byte
+"""
 function PrivateKey(private_key::AbstractVector{UInt8}; check=true, pad=:left, padvalue=0x00)
     if length(private_key) < 32
         if pad == :left
@@ -91,7 +115,7 @@ function PrivateKey(private_key::AbstractVector{UInt8}; check=true, pad=:left, p
                       privatekey_to_wif(private_key, compressed=true))
 end
 
-function PublicKey(private_key::Union{AbstractString, AbstractVector{UInt8}, T}; check=true) where {T <: Number}
+function PublicKey(private_key::Union{AbstractString, AbstractVector{UInt8}, T}; check=true) where {T <: Integer}
     return PublicKey(PrivateKey(private_key), check=check)
 end
 
@@ -112,7 +136,7 @@ function PublicKey(private_key::PrivateKey; check=true)
                     )
 end
 
-function BTCAddresses(private_key::Union{AbstractString, AbstractVector{UInt8}, T}; testnet=false) where {T <: Number}
+function BTCAddresses(private_key::Union{AbstractString, AbstractVector{UInt8}, T}; testnet=false) where {T <: Integer}
     return BTCAddresses(PrivateKey(private_key), testnet=testnet)
 end
 
@@ -144,7 +168,7 @@ function BTCAddresses(public_key::PublicKey; testnet=false)
     return BTCAddresses(String(p2pkh_address), String(compressed_p2pkh_address), String(p2sh_address), bech32_address)
 end
 
-function Wallet(private_key::Union{AbstractString, AbstractVector{UInt8}, T}) where {T <: Number}
+function Wallet(private_key::Union{AbstractString, AbstractVector{UInt8}, T}) where {T <: Integer}
     return Wallet(PrivateKey(private_key))
 end
 
@@ -171,10 +195,10 @@ function wif_to_privatekey_bytes(wif::AbstractString)::Vector{UInt8}
     length(wif) in (51, 52) || throw(ArgumentError("WIF strings must be 51 (uncompressed) or 52 (compressed) characters long"))
     decoded_wif = base58decode(codeunits(wif))
     checksum = decoded_wif[end-3:end]
-    @assert sha256(sha256(decoded_wif[1:end-4]))[1:4] == checksum
-    if length(wif) == 52 # WIF is Compressed
+    sha256(sha256(decoded_wif[1:end-4]))[1:4] == checksum || throw("Checksum error")
+    if length(wif) == 52 # WIF compressed
         return decoded_wif[2:end-5]
-    elseif length(wif) == 51 # WIF is uncompressed
+    elseif length(wif) == 51 # WIF uncompressed
         return decoded_wif[2:end-4]
     end
 end
@@ -199,6 +223,7 @@ function validate_private_key(private_key::AbstractVector{UInt8})
     return validate_private_key(to_big(private_key))
 end
 
-function validate_private_key(private_key::T) where {T <: Number}
+function validate_private_key(private_key::T) where {T <: Integer}
     return (1 <= private_key <= 115792089237316195423570985008687907852837564279074904382605163141518161494336) || throw("Private key out of range")
 end
+
