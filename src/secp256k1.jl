@@ -22,12 +22,12 @@ elseif Sys.iswindows()
 end
 
 function secp256k1_context_create()::Ptr{Any}
-    return ccall((:secp256k1_context_create, "src/libsecp256k1.2.dylib"), Ptr{Any}, (UInt32,), SECP256K1_CONTEXT_NONE)
+    return ccall((:secp256k1_context_create, libsecp256k1_fn), Ptr{Any}, (UInt32,), SECP256K1_CONTEXT_NONE)
 end
 
 function secp256k1_ec_pubkey_create(context::Ptr{Any}, private_key::Vector{UInt8})::Vector{UInt8}
     public_key = Array{UInt8}(undef, 64)
-    ccall((:secp256k1_ec_pubkey_create, "src/libsecp256k1.2.dylib"), 
+    ccall((:secp256k1_ec_pubkey_create, libsecp256k1_fn), 
           Int32, 
           (Ref{Any}, Ref{UInt8}, Ref{UInt8}), 
           context, public_key, private_key)
@@ -47,7 +47,7 @@ function secp256k1_ec_pubkey_serialize(context::Ptr{Any},
             output_size = 65
         end
         
-        ccall((:secp256k1_ec_pubkey_serialize, "src/libsecp256k1.2.dylib"), 
+        ccall((:secp256k1_ec_pubkey_serialize, libsecp256k1_fn), 
         Int32, 
         (Ref{Any}, Ref{Cuchar}, Ref{Csize_t}, Ref{UInt8}, UInt32),
         context, public_key, Ref(output_size), unserialize_public_key, compressed ? SECP256K1_EC_COMPRESSED : SECP256K1_EC_UNCOMPRESSED)
@@ -56,5 +56,5 @@ function secp256k1_ec_pubkey_serialize(context::Ptr{Any},
 end
 
 function secp256k1_context_destroy(context::Ptr{Any})::Cvoid
-    return ccall((:secp256k1_context_destroy, "src/libsecp256k1.2.dylib"), Cvoid, (Ref{Any},), context)
+    return ccall((:secp256k1_context_destroy, libsecp256k1_fn), Cvoid, (Ref{Any},), context)
 end
