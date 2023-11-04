@@ -20,6 +20,9 @@
 
 # Stolen from https://github.com/fiatjaf/bech32
 
+const BECH32_CHARSET::String = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
 function bech32_polymod(values::Vector{<:Integer})
     generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
     chk = 1
@@ -33,7 +36,7 @@ function bech32_polymod(values::Vector{<:Integer})
     return chk
 end
 
-function bech32_checksum(hrp::String, data::Vector{UInt8})
+function bech32_checksum(hrp::String, data::Vector{UInt8})::Vector{UInt8}
     hrp_expanded = vcat([UInt8(c) >> 5 for c in hrp], 0x00, [UInt8(c) & 31 for c in hrp])
     values = vcat(hrp_expanded, data)
     polymod = bech32_polymod(vcat(values, fill(0x00, 6))) ⊻ 1
@@ -49,20 +52,70 @@ function bech32_checksum(hrp::String, data::Vector{UInt8})
     return checksum
 end
 
-function bech32_encode(hrp::String, data::Vector{UInt8})
+function bech32_encode(hrp::String, data::Vector{UInt8})::String
     ### checksum
-    CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
     combined = vcat(data, bech32_checksum(hrp, data))
-    return hrp * "1" * join(CHARSET[d+1] for d in combined)
+    return hrp * "1" * join(Char[BECH32_CHARSET[d+1] for d in combined])
 end
 
-function squash_8to5(x::Vector{UInt8})::Vector{UInt8}
+function squash_8to5(x::Vector{UInt8}; pad=true)::Vector{UInt8}
+    isempty(x) && return UInt8[]
+
+    mask = 0x001f # 0b00000000 0b00011111
+    squashed = UInt8[]
+
+    mask_pos = 0
+    i = length(x) - 1
+    
+    for k in 1:div(length(x) * 8 + 4, 5) # +(5 - 1) for ceildiv(x, 5)
+        
+        rmask = UInt8(0x00ff & mask)
+        lmask = UInt8((0xff00 & mask) >> 8)
+
+        # println(k)
+        # println(bitstring(lmask), " ", bitstring(rmask))
+        # println(bitstring((i > 0 ? x[i] : 0x00)), " ", bitstring(x[i+1]))
+        # println(bitstring(bitrotate(lmask & (i > 0 ? x[i] : 0x00), -mask_pos)), " ", bitstring(bitrotate(rmask & x[i + 1], -mask_pos)))
+        # println(bitstring(bitrotate(lmask & (i > 0 ? x[i] : 0x00), -mask_pos) | bitrotate(rmask & x[i + 1], -mask_pos)))
+        # println()
+        
+        push!(squashed, bitrotate(lmask & (i > 0 ? x[i] : 0x00), -mask_pos) | bitrotate(rmask & x[i + 1], -mask_pos))
+
+        mask = bitrotate(mask, 5)
+        mask_pos += 5
+        if mask_pos > 8
+            mask = bitrotate(mask, 8)
+            mask_pos = mod(mask_pos, 8)
+            i -= 1
+        end
+
+    end    
+
+    if !pad
+        while length(squashed) > 0 && squashed[end] == 0x00
+            pop!(squashed)
+        end
+    end
+
+    return reverse!(squashed)
+end
+
+
+function squash_8to5_slow(x::Vector{UInt8}; pad=true)::Vector{UInt8}
     big_x = to_big(x)
     mask = 1 << 5 - 1
     squashed = UInt8[]
     while big_x > 0
         push!(squashed, UInt8(big_x & mask))
         big_x >>= 5
+    end
+    if pad
+        target_bits = 8 * length(x)
+        current_bits = 5 * length(squashed)
+        padding_bits = target_bits - current_bits
+        if padding_bits > 0
+            append!(squashed, fill(0x00, div(padding_bits + 4, 5)))
+        end
     end
     return reverse!(squashed)
 end

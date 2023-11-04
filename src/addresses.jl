@@ -1,3 +1,7 @@
+const max_bigint_privkey::BigInt = 115792089237316195423570985008687907852837564279074904382605163141518161494336
+const max_privkey::Vector{UInt8} = bytes(max_bigint_privkey)
+const min_privkey = vcat(zeros(UInt8, 31), 0x01)
+
 struct PrivateKey
     key::Vector{UInt8}
     wif::String
@@ -49,8 +53,6 @@ end
 
 function Base.show(io::IO, wallet::Wallet)
     println(io, "Wallet")
-    println(io, wallet.private_key)
-    println(io)
     println(io, wallet.private_key)
     println(io)
     println(io, wallet.public_key)
@@ -116,12 +118,13 @@ function PrivateKey(private_key::AbstractVector{UInt8}; check=true, pad=:left, p
 end
 
 function PublicKey(private_key::Union{AbstractString, AbstractVector{UInt8}, T}; check=true) where {T <: Integer}
-    return PublicKey(PrivateKey(private_key), check=check)
+    return PublicKey(PrivateKey(private_key, check=check))
 end
 
-function PublicKey(private_key::PrivateKey; check=true)
+function PublicKey_slow(private_key::PrivateKey; hash160=true)
 
-    point = to_big(private_key.key) * G
+    big_pk =  to_big(private_key.key)
+    point = big_pk * G
 
     xbytes = bytes(point.𝑥.𝑛)
     prepend!(xbytes, fill(0x00, 32 - length(xbytes)))
@@ -131,41 +134,69 @@ function PublicKey(private_key::PrivateKey; check=true)
     public_key = vcat(0x04, xbytes, ybytes)
     public_key_c = vcat(mod(point.𝑦.𝑛, 2) == 0 ? 0x02 : 0x03, xbytes)
 
-    return PublicKey(public_key, ripemd160(sha256(public_key)), 
-                     public_key_c, ripemd160(sha256(public_key_c))
-                    )
+    if hash160
+        return PublicKey(public_key, ripemd160(sha256(public_key)), 
+                         public_key_c, ripemd160(sha256(public_key_c)))
+    else
+        return PublicKey(public_key, UInt8[], public_key_c, UInt8[])
+    end
 end
 
-function BTCAddresses(private_key::Union{AbstractString, AbstractVector{UInt8}, T}; testnet=false) where {T <: Integer}
-    return BTCAddresses(PrivateKey(private_key), testnet=testnet)
+function PublicKey(private_key::PrivateKey; hash160=true)
+
+    ctx = secp256k1_context_create()
+    unserialized_pubkey = secp256k1_ec_pubkey_create(ctx, private_key.key)
+    public_key = secp256k1_ec_pubkey_serialize(ctx, unserialized_pubkey, compressed=false)
+    public_key_c = secp256k1_ec_pubkey_serialize(ctx, unserialized_pubkey, compressed=true)
+    secp256k1_context_destroy(ctx)
+
+    if hash160
+        return PublicKey(public_key, ripemd160(sha256(public_key)), 
+                         public_key_c, ripemd160(sha256(public_key_c)))
+    else
+        return PublicKey(public_key, UInt8[], public_key_c, UInt8[])
+    end
 end
 
 function BTCAddresses(private_key::PrivateKey; testnet=false)
     return BTCAddresses(PublicKey(private_key), testnet=testnet)
 end
 
-function p2pkh(hash::AbstractVector{UInt8}; testnet=false)::Vector{UInt8}
+function BTCAddresses(private_key::Union{AbstractString, AbstractVector{UInt8}, T}; testnet=false) where {T <: Integer}
+    return BTCAddresses(PrivateKey(private_key), testnet=testnet)
+end
+
+function hash_to_p2pkh(hash::AbstractVector{UInt8}; testnet=false)::String
     padded_hash = vcat(testnet ? 0x6f : 0x00, hash)
     checksum = sha256(sha256(padded_hash))[1:4]
-    return base58encode(vcat(padded_hash, checksum))
+    return String(base58encode(vcat(padded_hash, checksum)))
+end
+
+function hash160_to_p2sh(hash::Vector{UInt8}; testnet=false)::String
+    # P2SH-P2WPKH (https://bitcointalk.org/index.php?topic=5229211.0)
+    redeem_script = vcat([0x00, 0x14], hash)
+    p2sh_address_raw = vcat(testnet ? 0xc4 : 0x05, ripemd160(sha256(redeem_script)))
+    p2sh_address = base58encode(vcat(p2sh_address_raw, sha256(sha256(p2sh_address_raw))[1:4]))
+    return String(p2sh_address)
+end
+
+function hash160_to_bech32(hash::Vector{UInt8}; testnet=false)::String
+    # BECH32 (https://bitcointalk.org/index.php?topic=4992632.0)
+    versioned_squashed = vcat(0x00, squash_8to5(hash))
+    bech32_address = bech32_encode(testnet ? "tb" : "bc", versioned_squashed)
+    return bech32_address
 end
 
 function BTCAddresses(public_key::PublicKey; testnet=false)
 
-    p2pkh_address = p2pkh(public_key.key_hash, testnet=testnet)
+    p2pkh_address = hash_to_p2pkh(public_key.key_hash, testnet=testnet)
 
-    compressed_p2pkh_address = p2pkh(public_key.key_c_hash, testnet=testnet)
+    compressed_p2pkh_address = hash_to_p2pkh(public_key.key_c_hash, testnet=testnet)
 
-    # P2SH-P2WPKH (https://bitcointalk.org/index.php?topic=5229211.0)
-    redeem_script = vcat([0x00, 0x14], public_key.key_c_hash)
-    p2sh_address = vcat(testnet ? 0xc4 : 0x05, ripemd160(sha256(redeem_script)))
-    p2sh_address = base58encode(vcat(p2sh_address, sha256(sha256(p2sh_address))[1:4]))
+    p2sh_address = hash160_to_p2sh(public_key.key_c_hash, testnet=testnet)
+    bech32_address = hash160_to_bech32(public_key.key_c_hash, testnet=testnet)
 
-    # BECH32 (https://bitcointalk.org/index.php?topic=4992632.0)
-    versioned_squashed = vcat(0x00, squash_8to5(public_key.key_c_hash))
-    bech32_address = bech32_encode(testnet ? "tb" : "bc", versioned_squashed)
-
-    return BTCAddresses(String(p2pkh_address), String(compressed_p2pkh_address), String(p2sh_address), bech32_address)
+    return BTCAddresses(p2pkh_address, compressed_p2pkh_address, p2sh_address, bech32_address)
 end
 
 function Wallet(private_key::Union{AbstractString, AbstractVector{UInt8}, T}) where {T <: Integer}
@@ -214,7 +245,7 @@ function privatekey_to_p2pkhc(private_key::Vector{UInt8}; testnet=false)::Vector
     length(xbytes) < 32 && prepend!(xbytes, fill(0x00, 32 - length(xbytes)))
     public_key_c = vcat(mod(point.𝑦.𝑛, 2) == 0 ? 0x02 : 0x03, xbytes)
     public_key_c_hash = ripemd160(sha256(public_key_c))
-    return p2pkh(public_key_c_hash, testnet=testnet)
+    return hash_to_p2pkh(public_key_c_hash, testnet=testnet)
 end
 
 
@@ -223,7 +254,14 @@ function validate_private_key(private_key::AbstractVector{UInt8})
     return validate_private_key(to_big(private_key))
 end
 
-function validate_private_key(private_key::T) where {T <: Integer}
-    return (1 <= private_key <= 115792089237316195423570985008687907852837564279074904382605163141518161494336) || throw("Private key out of range")
+function validate_private_key(private_key::T; throw_error=true) where {T <: Integer}
+    if 1 <= private_key <= max_bigint_privkey
+        return true
+    else
+        if throw_error
+            throw("Private key out of range")
+        else
+            return false
+        end
+    end
 end
-
