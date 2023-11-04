@@ -13,6 +13,14 @@ const SECP256K1_EC_UNCOMPRESSED::UInt32 = SECP256K1_FLAGS_TYPE_COMPRESSION
 # SECP256K1_CALLBACK = Tuple{Ptr{Cvoid}, Ptr{Cvoid}}
 # SECP256K1_CONTEXT = Tuple{SECP256K1_ECMULT_GEN_CONTEXT, SECP256K1_CALLBACK, SECP256K1_CALLBACK, Int32}
 
+if Sys.isapple()
+    const libsecp256k1_fn::String = "lib/libsecp256k1.dylib"
+elseif Sys.islinux()
+    const libsecp256k1_fn::String = "lib/libsecp256k1.so"
+elseif Sys.iswindows()
+    throw("Not implemented (libsecp256k1)")
+end
+
 function secp256k1_context_create()::Ptr{Any}
     return ccall((:secp256k1_context_create, "src/libsecp256k1.2.dylib"), Ptr{Any}, (UInt32,), SECP256K1_CONTEXT_NONE)
 end
