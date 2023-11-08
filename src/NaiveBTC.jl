@@ -15,7 +15,8 @@ export secp256k1_context_create, secp256k1_ec_pubkey_create, secp256k1_ec_pubkey
 include("secp256k1.jl")
 
 export PrivateKey, PublicKey, BTCAddresses, Wallet
-export wif_to_privatekey_bytes, p2pkh, validate_private_key
+export wif_to_privatekey_bytes, validate_private_key
+export hash_to_p2pkh, hash160_to_p2sh, hash160_to_bech32
 include("addresses.jl")
 
 export brainwallet, read_balance_dict, check_balance

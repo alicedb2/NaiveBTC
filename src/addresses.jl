@@ -180,6 +180,12 @@ function hash160_to_p2sh(hash::Vector{UInt8}; testnet=false)::String
     return String(p2sh_address)
 end
 
+function scripthash_to_p2sh(hash::Vector{UInt8}; testnet=false)::String
+    p2sh_address_raw = vcat(testnet ? 0xc4 : 0x05, hash)
+    p2sh_address = base58encode(vcat(p2sh_address_raw, sha256(sha256(p2sh_address_raw))[1:4]))
+    return String(p2sh_address)
+end
+
 function hash160_to_bech32(hash::Vector{UInt8}; testnet=false)::String
     # BECH32 (https://bitcointalk.org/index.php?topic=4992632.0)
     versioned_squashed = vcat(0x00, squash_8to5(hash))
