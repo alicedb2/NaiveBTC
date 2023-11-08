@@ -19,7 +19,7 @@ struct BTCAddresses
     p2pkh::String
     p2pkh_c::String
     p2sh_c::String
-    bech32::String
+    p2wpkh::String
 end
 
 struct Wallet
@@ -48,7 +48,7 @@ function Base.show(io::IO, addrs::BTCAddresses)
     println(io, "   P2PKH(c) address: $(addrs.p2pkh_c)")
     println(io, "      P2PKH address: $(addrs.p2pkh)")
     println(io, "    P2SH(c) address: $(addrs.p2sh_c)")
-    print(io,   "  BECH32(c) address: $(addrs.bech32)")
+    print(io,   "     P2WPKH address: $(addrs.p2wpkh)")
 end
 
 function Base.show(io::IO, wallet::Wallet)
@@ -186,11 +186,11 @@ function scripthash_to_p2sh(hash::Vector{UInt8}; testnet=false)::String
     return String(p2sh_address)
 end
 
-function hash160_to_bech32(hash::Vector{UInt8}; testnet=false)::String
-    # BECH32 (https://bitcointalk.org/index.php?topic=4992632.0)
+function hash160_to_p2wpkh(hash::Vector{UInt8}; testnet=false)::String
+    # P2WPKH (https://bitcointalk.org/index.php?topic=4992632.0)
     versioned_squashed = vcat(0x00, squash_8to5(hash))
-    bech32_address = bech32_encode(testnet ? "tb" : "bc", versioned_squashed)
-    return bech32_address
+    p2wpkh_address = bech32_encode(testnet ? "tb" : "bc", versioned_squashed)
+    return p2wpkh_address
 end
 
 function BTCAddresses(public_key::PublicKey; testnet=false)
@@ -200,9 +200,9 @@ function BTCAddresses(public_key::PublicKey; testnet=false)
     compressed_p2pkh_address = hash_to_p2pkh(public_key.key_c_hash, testnet=testnet)
 
     p2sh_address = hash160_to_p2sh(public_key.key_c_hash, testnet=testnet)
-    bech32_address = hash160_to_bech32(public_key.key_c_hash, testnet=testnet)
+    p2wpkh_address = hash160_to_p2wpkh(public_key.key_c_hash, testnet=testnet)
 
-    return BTCAddresses(p2pkh_address, compressed_p2pkh_address, p2sh_address, bech32_address)
+    return BTCAddresses(p2pkh_address, compressed_p2pkh_address, p2sh_address, p2wpkh_address)
 end
 
 function Wallet(private_key::Union{AbstractString, AbstractVector{UInt8}, T}) where {T <: Integer}
@@ -241,18 +241,18 @@ function wif_to_privatekey_bytes(wif::AbstractString)::Vector{UInt8}
 end
 
 # Stripped down version for puzzles, no private key check
-function privatekey_to_p2pkhc(private_key::AbstractString; testnet=testnet)::Vector{UInt8}
-    return privatekey_to_p2pkhc(hex2bytes(private_key), testnet=testnet)
-end
+# function privatekey_to_p2pkhc(private_key::AbstractString; testnet=testnet)::Vector{UInt8}
+#     return privatekey_to_p2pkhc(hex2bytes(private_key), testnet=testnet)
+# end
 
-function privatekey_to_p2pkhc(private_key::Vector{UInt8}; testnet=false)::Vector{UInt8}
-    point = to_big(private_key) * G
-    xbytes = bytes(point.𝑥.𝑛)
-    length(xbytes) < 32 && prepend!(xbytes, fill(0x00, 32 - length(xbytes)))
-    public_key_c = vcat(mod(point.𝑦.𝑛, 2) == 0 ? 0x02 : 0x03, xbytes)
-    public_key_c_hash = ripemd160(sha256(public_key_c))
-    return hash_to_p2pkh(public_key_c_hash, testnet=testnet)
-end
+# function privatekey_to_p2pkhc(private_key::Vector{UInt8}; testnet=false)::Vector{UInt8}
+#     point = to_big(private_key) * G
+#     xbytes = bytes(point.𝑥.𝑛)
+#     length(xbytes) < 32 && prepend!(xbytes, fill(0x00, 32 - length(xbytes)))
+#     public_key_c = vcat(mod(point.𝑦.𝑛, 2) == 0 ? 0x02 : 0x03, xbytes)
+#     public_key_c_hash = ripemd160(sha256(public_key_c))
+#     return hash_to_p2pkh(public_key_c_hash, testnet=testnet)
+# end
 
 
 function validate_private_key(private_key::AbstractVector{UInt8})
