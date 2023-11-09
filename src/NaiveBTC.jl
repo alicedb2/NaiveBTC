@@ -16,7 +16,7 @@ include("secp256k1.jl")
 
 export PrivateKey, PublicKey, BTCAddresses, Wallet
 export wif_to_privatekey_bytes, validate_private_key
-export hash_to_p2pkh, hash160_to_p2sh, hash160_to_bech32
+export hash_to_p2pkh, hash160_to_p2sh, hash160_to_p2wpkh
 include("addresses.jl")
 
 export brainwallet, read_balance_dict, check_balance
