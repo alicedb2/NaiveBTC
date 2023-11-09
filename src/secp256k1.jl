@@ -14,9 +14,10 @@ const SECP256K1_EC_UNCOMPRESSED::UInt32 = SECP256K1_FLAGS_TYPE_COMPRESSION
 # SECP256K1_CONTEXT = Tuple{SECP256K1_ECMULT_GEN_CONTEXT, SECP256K1_CALLBACK, SECP256K1_CALLBACK, Int32}
 
 if Sys.isapple()
-    const libsecp256k1_fn = joinpath(pwd(), "lib/libsecp256k1.dylib")
+    println(joinpath(@__DIR__, "../lib/libsecp256k1.dylib"))
+    const libsecp256k1_fn = joinpath(@__DIR__, "../lib/libsecp256k1.dylib")
 elseif Sys.islinux()
-    const libsecp256k1_fn::String = joinpath(pwd(), "lib/libsecp256k1.so")
+    const libsecp256k1_fn = joinpath(@__DIR__, "../lib/libsecp256k1.so")
 elseif Sys.iswindows()
     throw("Not implemented (libsecp256k1)")
 end
