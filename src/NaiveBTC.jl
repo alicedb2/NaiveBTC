@@ -22,4 +22,6 @@ include("addresses.jl")
 export brainwallet, read_balance_dict, check_balance
 include("helpers.jl")
 
+include("opcodes.jl")
+
 end
